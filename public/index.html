@@ -9,13 +9,21 @@
 <body>
     <section class="navbar">
         <img class="logo" src="./img/logo.png" alt="logo">
-        <h2 class="description">Talk to strangers!</h1>
+        <h2 class="description">Talk to strangers!</h2>
         <h2 class="online"></h2>
     </section>
 
     <main class="main">
-        <section class="conversation">
-        </section>
+        <div class="conversation-container">
+            <section class="conversation">
+                <!-- Messages will be dynamically added here -->
+            </section>
+
+            <div class="video-container">
+                <video id="localVideo" autoplay muted></video>
+                <video id="remoteVideo" autoplay></video>
+            </div>
+        </div>
 
         <form class="form">
             <button type="button" class="btn start bottom-left-radius" id="start">Start</button>
