@@ -1,214 +1,235 @@
-// connect to main namespace
+// Connect to main namespace
 const socket = io('/');
 
 const conversation = document.querySelector('.conversation');
+const localVideo = document.getElementById('localVideo');
+const remoteVideo = document.getElementById('remoteVideo');
 
 let alreadyTyping = false;
+let localStream;
+let peerConnection;
+const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-// change the number of online
+// Update number of online users
 socket.on('numberOfOnline', size => {
-    document.querySelector('.online').innerHTML = `${size.toLocaleString()} online now`
+    document.querySelector('.online').innerHTML = `${size.toLocaleString()} online now`;
 });
 
-// event listener for search
+// Start searching for a chat partner
 document.querySelector('#start').addEventListener('click', () => {
-    // searching for someone to talk to
     socket.emit('start', socket.id);
 });
 
-// display searching message
+// Display searching message
 socket.on('searching', msg => {
-    // add the searching message to our html
     conversation.innerHTML = `<div class="message">${msg}</div>`;
 });
 
-// found someone
-// start of their chat
+// Chat start message
 socket.on('chatStart', msg => {
-    // add the message to our html that a user has found
     conversation.innerHTML = `<div class="message">${msg}</div>`;
-
-    // remove the hide class of stop button
     document.querySelector('#stop').classList.remove('hide');
-
-    // hide start button
     document.querySelector('#start').classList.add('hide');
-
-    // remove disabled attribute in textarea
     document.querySelector('#text').disabled = false;
-
-    // remove disabled attribute in send button
     document.querySelector('#send').disabled = false;
+
+    // Initialize video chat
+    initVideoChat();
 });
 
-// event listener for form submit
+// Initialize local video stream
+function initLocalStream() {
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true }) // Enable audio
+        .then(stream => {
+            localStream = stream;
+            localVideo.srcObject = stream;
+        })
+        .catch(error => {
+            console.error('Error accessing media devices.', error);
+        });
+}
+
+// Start the video chat
+function initVideoChat() {
+    initLocalStream();
+    peerConnection = new RTCPeerConnection(config);
+
+    // Add audio and video tracks to peer connection
+    localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream);
+    });
+
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            socket.emit('signal', { target: socket.id, signal: event.candidate });
+        }
+    };
+
+    peerConnection.ontrack = (event) => {
+        remoteVideo.srcObject = event.streams[0];
+    };
+
+    peerConnection.createOffer()
+        .then(offer => {
+            return peerConnection.setLocalDescription(offer);
+        })
+        .then(() => {
+            socket.emit('signal', { target: socket.id, signal: peerConnection.localDescription });
+        });
+}
+
+// Handle signaling messages
+socket.on('signal', (data) => {
+    if (data.signal) {
+        if (data.signal.type === 'offer') {
+            peerConnection.setRemoteDescription(new RTCSessionDescription(data.signal))
+                .then(() => {
+                    return peerConnection.createAnswer();
+                })
+                .then(answer => {
+                    return peerConnection.setLocalDescription(answer);
+                })
+                .then(() => {
+                    socket.emit('signal', { target: data.sender, signal: peerConnection.localDescription });
+                });
+        } else if (data.signal.type === 'answer') {
+            peerConnection.setRemoteDescription(new RTCSessionDescription(data.signal));
+        } else if (data.signal.candidate) {
+            peerConnection.addIceCandidate(new RTCIceCandidate(data.signal));
+        }
+    }
+});
+
+// Event listener for form submit
 document.querySelector('.form').addEventListener('submit', e => {
     e.preventDefault();
     submitMessage();
 });
 
-// event listener when user press enter key
+// Event listener for Enter key
 document.querySelector('#text').onkeydown = e => {
-    // enter key is pressed without shift key
-    if(e.keyCode === 13 && !e.shiftKey) {
+    if (e.keyCode === 13 && !e.shiftKey) {
         e.preventDefault();
         submitMessage();
     }
 }
 
-// event listener when user is typing
+// Event listener for user typing
 document.querySelector('#text').addEventListener('input', e => {
-    if(!alreadyTyping) {
-        // emit message to server that a stranger is typing
+    if (!alreadyTyping) {
         socket.emit('typing', 'Stranger is typing...');
-
         alreadyTyping = true;
     }
-
-    // check if user is not typing
-    if(e.target.value === '') {
+    if (e.target.value === '') {
         socket.emit('doneTyping');
-
         alreadyTyping = false;
     }
 });
 
-// event listener when textarea is not focused
+// Event listener when textarea loses focus
 document.querySelector('#text').addEventListener('blur', () => {
     socket.emit('doneTyping');
-
     alreadyTyping = false;
 });
 
-// event listener when textarea is clicked
+// Event listener for textarea click
 document.querySelector('#text').addEventListener('click', e => {
-    // check if value is not empty
-    if(e.target.value !== '') {
-        // emit message to server that a stranger is typing
+    if (e.target.value !== '') {
         socket.emit('typing', 'Stranger is typing...');
-
         alreadyTyping = true;
     }
 });
 
-// receive the message from server then add it to html
+// Receive new messages and update HTML
 socket.on('newMessageToClient', data => {
     const notStranger = data.id === socket.id;
-
     conversation.innerHTML += `
         <div class="chat">
-            <span class="${notStranger ? 'name blue' : 'name red'}">${notStranger ? 'You: ' : 'Stranger: '} </span>
+            <span class="${notStranger ? 'name blue' : 'name red'}">${notStranger ? 'You: ' : 'Stranger: '}</span>
             <span class="text">${data.msg}</span>
         </div>
     `;
-
-    // scroll to the bottom of the conversation
     conversation.scrollTo(0, conversation.scrollHeight);
 });
 
-// message when someome is typing
+// Display typing messages
 socket.on('strangerIsTyping', msg => {
-    // add the message to html
-    conversation.innerHTML += conversation.innerHTML = `<div class="message typing">${msg}</div>`;
-
-    // scroll conversation to bottom
+    conversation.innerHTML += `<div class="message typing">${msg}</div>`;
     conversation.scrollTo(0, conversation.scrollHeight);
 });
 
-// remove the Stranger is typing... message
+// Remove typing message
 socket.on('strangerIsDoneTyping', () => {
     const typing = document.querySelector('.typing');
-
-    if(typing) {
+    if (typing) {
         typing.remove();
     }
 });
 
-// message when someone disconnect
+// Handle user disconnect
 socket.on('goodBye', msg => {
     conversation.innerHTML += `<div class="message">${msg}</div>`;
-
     reset();
 });
 
-// stop button
+// Stop button
 document.querySelector('#stop').addEventListener('click', () => {
-    // hide stop button
     document.querySelector('#stop').classList.add('hide');
-
-    // show really button
     document.querySelector('#really').classList.remove('hide');
 });
 
-// really button
+// Confirm stop button
 document.querySelector('#really').addEventListener('click', () => {
-    // stop conversation
     socket.emit('stop');
 });
 
-// display message when stranger disconnect
+// Display disconnect message
 socket.on('strangerDisconnected', msg => {
     conversation.innerHTML += `<div class="message">${msg}</div>`;
-
     reset();
 });
 
-// display message when current user disconnect
+// End chat message
 socket.on('endChat', msg => {
     conversation.innerHTML += `<div class="message">${msg}</div>`;
-
     reset();
 });
 
+// Submit message function
 function submitMessage() {
-    // get the input
     const input = document.querySelector('#text');
-
-    // check if input is not an empty string
-    if(/\S/.test(input.value)) {
-        // emit to server that the user is done typing
+    if (/\S/.test(input.value)) {
         socket.emit('doneTyping');
-
-        // emit the value of input to server
         socket.emit('newMessageToServer', input.value);
-
-        // clear the value of input
         input.value = '';
-
-        // set alreadyTyping back to false
         alreadyTyping = false;
     }
 }
 
+// Reset chat interface
 function reset() {
-    // remove the hide class of start  button
     document.querySelector('#start').classList.remove('hide');
-
-    // hide stop button
     document.querySelector('#stop').classList.add('hide');
-
-    // hide really button
     document.querySelector('#really').classList.add('hide');
 
     const text = document.querySelector('#text');
-
-    // add disabled attribute in textarea
     text.disabled = true;
-
     text.value = '';
-
-    // add disabled attribute in send button
     document.querySelector('#send').disabled = true;
 
-    // remove Stranger is typing... message if exists
     const typing = document.querySelector('.typing');
-
-    if(typing) {
+    if (typing) {
         typing.remove();
     }
 
     alreadyTyping = false;
 
-    // scroll conversation to bottom
+    // Stop local stream and clear video sources
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localVideo.srcObject = null;
+        remoteVideo.srcObject = null;
+    }
+
     conversation.scrollTo(0, conversation.scrollHeight);
 }
