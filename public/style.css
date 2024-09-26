@@ -6,7 +6,7 @@
 
 html {
     box-sizing: border-box;
-    font-size: 62.5%;
+    font-size: 62.5%; /* 1rem = 10px for easier calculations */
 }
 
 body {
@@ -27,7 +27,7 @@ body {
 }
 
 .logo {
-    height: 20rem;
+    height: 20rem; /* Consider making this responsive */
 }
 
 .description {
@@ -51,8 +51,14 @@ body {
     height: 88%;
 }
 
-.conversation {
+.conversation-container {
+    display: flex; /* Use flexbox for conversation and video alignment */
     height: 83%;
+    flex-grow: 1; /* Ensure it takes up remaining space */
+}
+
+.conversation {
+    flex: 1; /* Take up remaining space */
     background-color: white;
     border: 1px solid #CCCCCC;
     border-top-left-radius: 7px;
@@ -68,6 +74,22 @@ body {
     font-weight: 700;
     color: #565656;
     margin-bottom: .7rem;
+}
+
+.video-container {
+    display: flex;
+    flex-direction: column; /* Stack videos vertically */
+    height: 100%; /* Full height of the conversation */
+    width: 30%; /* Adjust width as needed */
+    margin-left: 1rem; /* Space between conversation and videos */
+}
+
+.video {
+    border: 1px solid #CCCCCC;
+    border-radius: 7px;
+    width: 100%; /* Full width of the container */
+    height: 48%; /* Adjust height to fit two videos */
+    background-color: black; /* Background color for the video elements */
 }
 
 .chat {
@@ -121,7 +143,7 @@ body {
     border: none !important;
 }
 
-.start:focus{
+.start:focus {
     outline: none;
 }
 
@@ -157,7 +179,6 @@ body {
     }
 }
 
-
 @media only screen and (max-width: 48.125em) {
     /* 770px */
     .online {
@@ -173,6 +194,10 @@ body {
 
     .btn {
         font-size: 1.4rem;
+    }
+
+    .video-container {
+        width: 40%; /* Adjust width for smaller screens */
     }
 }
 
